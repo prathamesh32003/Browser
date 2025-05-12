@@ -2,11 +2,19 @@ import socket
 import ssl
 
 class URL:
-    def __init__(self, url):
-        self.scheme, url = url.split("://", 1)
-        assert self.scheme in ["http", "https", "file"]
+    def __get_scheme(self, url):
+        self.scheme, url = url.split(":", 1)
+        if url[:2] == "//":
+            url = url[2:]
+        return url
 
-        if self.scheme in ["http", "https"]:
+    def __init__(self, url):
+        url = self.__get_scheme(url)
+        assert self.scheme in ["http", "https", "file", "data", "view-source"]
+
+        if self.scheme in ["http", "https", "view-source"]:
+            if self.scheme == "view-source":
+                self.scheme, url = url.split("://", 1)
             if not "/" in url:
                 url = url + "/"
             self.host, url = url.split("/", 1)
@@ -16,11 +24,14 @@ class URL:
                 self.host, port = self.host.split(":", 1)
                 self.port = int(port)
 
-        elif self.scheme in "file":
+        elif self.scheme in ["file"]:
             self.path = url
 
+        elif self.scheme in ["data"]:
+            type, self.body = url.split(",", 1)
+
     def request(self):
-        if self.scheme in ["http", "https"]:
+        if self.scheme in ["http", "https", "view-source"]:
             s = socket.socket(
                 family=socket.AF_INET,
                 type=socket.SOCK_STREAM,
@@ -69,10 +80,13 @@ class URL:
             file.close()
             return content
 
+        if self.scheme == "data":
+            return self.body
 
 def show(scheme, body):
     if scheme in ["http", "https"]:
         in_tag = False
+        content = ""
 
         for c in body:
             if c == "<":
@@ -80,8 +94,13 @@ def show(scheme, body):
             elif c == ">":
                 in_tag = False
             elif not in_tag:
-                print(c, end="")
-    elif scheme in ["file"]:
+                content += c
+
+        content = content.replace("&lt;", "<")
+        content = content.replace("&gt;", ">")
+        print(content)
+
+    elif scheme in ["file", "data", "view-source"]:
         print(body)
 
 def load(url):
