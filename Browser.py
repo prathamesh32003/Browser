@@ -51,19 +51,21 @@ class URL:
 
             request = "GET {} HTTP/1.0\r\n".format(self.path)
             request += "Host: {}\r\n".format(self.host)
-            request += "Connection: close\r\n"
+            request += "Connection: keep-alive\r\n"
             request += "User-Agent: Mozilla/5.0\r\n"
             request += "\r\n"
             s.send(request.encode("utf8"))
 
-            response = s.makefile("r", encoding="utf8", newline="\r\n")
+            response = s.makefile("rb", encoding="utf8", newline="\r\n")
 
             statusline = response.readline()
+            statusline = statusline.decode("utf-8")
             version, status, explanation = statusline.split(" ", 2)
 
             response_headers = {}
             while True:
                 line = response.readline()
+                line = line.decode("utf-8")
                 if line == "\r\n": break
                 header, value = line.split(":", 1)
                 response_headers[header.casefold()] = value.strip()
@@ -71,10 +73,10 @@ class URL:
             assert "transfer-encoding" not in response_headers
             assert "content-encoding" not in response_headers
 
-            content = response.read()
-            s.close()
+            length = int(response_headers["content-length"]) if "content-length" in response_headers else -1
+            content = response.read(length)
 
-            return content
+            return content.decode("utf-8")
 
         if self.scheme == "file":
             file = open(self.path, 'r')
