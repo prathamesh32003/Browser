@@ -10,10 +10,12 @@ class URL:
 
     def __init__(self, url):
         url = self.__get_scheme(url)
+        self.view_source = False
         assert self.scheme in ["http", "https", "file", "data", "view-source"]
 
         if self.scheme in ["http", "https", "view-source"]:
             if self.scheme == "view-source":
+                self.view_source = True
                 self.scheme, url = url.split("://", 1)
             if not "/" in url:
                 url = url + "/"
@@ -83,8 +85,8 @@ class URL:
         if self.scheme == "data":
             return self.body
 
-def show(scheme, body):
-    if scheme in ["http", "https"]:
+def show(view_source, scheme, body):
+    if scheme in ["http", "https"] and not view_source:
         in_tag = False
         content = ""
 
@@ -100,12 +102,12 @@ def show(scheme, body):
         content = content.replace("&gt;", ">")
         print(content)
 
-    elif scheme in ["file", "data", "view-source"]:
+    elif scheme in ["file", "data"] or view_source:
         print(body)
 
 def load(url):
     body = url.request()
-    show(url.scheme, body)
+    show(url.view_source, url.scheme, body)
 
 if __name__ == "__main__":
     import sys
