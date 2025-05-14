@@ -2,6 +2,8 @@ import socket
 import ssl
 
 class URL:
+    redirects = 0
+    MAX_REDIRECTS = 5
     def __get_scheme(self, url):
         self.scheme, url = url.split(":", 1)
         if url[:2] == "//":
@@ -73,10 +75,25 @@ class URL:
             assert "transfer-encoding" not in response_headers
             assert "content-encoding" not in response_headers
 
-            length = int(response_headers["content-length"]) if "content-length" in response_headers else -1
-            content = response.read(length)
 
-            return content.decode("utf-8")
+            if 'location' in response_headers:
+                URL.redirects += 1;
+                print(URL.redirects)
+                if URL.redirects < URL.MAX_REDIRECTS:
+                    if response_headers['location'][:1] == "/":
+                        url = self.scheme + "://" + self.host + response_headers['location']
+                    else:
+                        url = response_headers['location']
+                    load(URL(url))
+                    return False
+                else:
+                    return "Max Redirects reached"
+            else:
+                URL.redirects = 0
+                length = int(response_headers["content-length"]) if "content-length" in response_headers else -1
+                content = response.read(length)
+
+                return content.decode("utf-8")
 
         if self.scheme == "file":
             file = open(self.path, 'r')
@@ -109,7 +126,8 @@ def show(view_source, scheme, body):
 
 def load(url):
     body = url.request()
-    show(url.view_source, url.scheme, body)
+    if body:
+        show(url.view_source, url.scheme, body)
 
 if __name__ == "__main__":
     import sys
