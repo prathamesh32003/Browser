@@ -1,5 +1,7 @@
 import socket
 import ssl
+import os
+import hashlib
 
 class URL:
     redirects = 0
@@ -11,6 +13,8 @@ class URL:
         return url
 
     def __init__(self, url):
+        if not os.path.exists(".cache"):
+            os.makedirs(".cache")
         url = self.__get_scheme(url)
         self.view_source = False
         assert self.scheme in ["http", "https", "file", "data", "view-source"]
@@ -34,8 +38,24 @@ class URL:
         elif self.scheme in ["data"]:
             type, self.body = url.split(",", 1)
 
+    def write_cache(self, response_headers, content):
+        if "no-store" in response_headers or "max-age" in response_headers:
+            key = f"{self.host}{self.path}".encode()
+            key = hashlib.md5(key).hexdigest() + ".cache"
+            path = os.path.join(".cache", key)
+            with open(path, 'w') as f:
+                f.write(content)
+
     def request(self):
         if self.scheme in ["http", "https", "view-source"]:
+            if self.scheme != "view-source":
+                key = f"{self.host}{self.path}".encode()
+                key = hashlib.md5(key).hexdigest() + ".cache"
+                print("From cache")
+                path = os.path.join(".cache", key)
+                with open(path, 'r') as f:
+                    return f.read()
+
             s = socket.socket(
                 family=socket.AF_INET,
                 type=socket.SOCK_STREAM,
@@ -75,10 +95,15 @@ class URL:
             assert "transfer-encoding" not in response_headers
             assert "content-encoding" not in response_headers
 
+            print(response_headers)
+            length = int(response_headers["content-length"]) if "content-length" in response_headers else -1
+            content = response.read(length)
+
+            if 'cache-control' in response_headers:
+                self.write_cache(response_headers['cache-control'], content.decode("utf-8"))
 
             if 'location' in response_headers:
                 URL.redirects += 1;
-                print(URL.redirects)
                 if URL.redirects < URL.MAX_REDIRECTS:
                     if response_headers['location'][:1] == "/":
                         url = self.scheme + "://" + self.host + response_headers['location']
@@ -90,11 +115,9 @@ class URL:
                     return "Max Redirects reached"
             else:
                 URL.redirects = 0
-                length = int(response_headers["content-length"]) if "content-length" in response_headers else -1
-                content = response.read(length)
-
                 return content.decode("utf-8")
 
+ 
         if self.scheme == "file":
             file = open(self.path, 'r')
             content = file.read()
